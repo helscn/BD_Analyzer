@@ -47,6 +47,10 @@ IF EXIST %compile_path%\.env\Scripts\activate.bat (
 	ECHO 正在激活脚本运行的 Python 虚拟环境...
 	CALL %compile_path%\.env\Scripts\activate.bat
 )
+IF EXIST %compile_path%\.venv\Scripts\activate.bat (
+	ECHO 正在激活脚本运行的 Python 虚拟环境...
+	CALL %compile_path%\.venv\Scripts\activate.bat
+)
 
 ECHO.
 ECHO PyInstaller %compile_mode% %show_console% %package_icon% %compile_name% %compile_file%
@@ -64,5 +68,9 @@ IF EXIST %compile_path%\.env\Scripts\deactivate.bat (
 	ECHO 正在退出脚本运行的 Python 虚拟环境...
 	CALL %compile_path%\.env\Scripts\deactivate.bat
 )
-ECHO.
+IF EXIST %compile_path%\.venv\Scripts\deactivate.bat (
+	ECHO.
+	ECHO 正在退出脚本运行的 Python 虚拟环境...
+	CALL %compile_path%\.venv\Scripts\deactivate.bat
+)ECHO.
 PAUSE

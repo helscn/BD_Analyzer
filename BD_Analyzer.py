@@ -141,7 +141,8 @@ def loadBackDrillData(files):
 
             # 读取 header
             header = next(csvfile)
-            if len(header) != 23:
+            # 加工记录总栏位数为 轴数*3+5
+            if len(header) <= 8 or header[0]!="#Date" or header[1]!="N":
                 raise ValueError('无法识别的背钻记录文件:\n'+file_path)
 
             for r in csvfile:
@@ -168,6 +169,10 @@ def loadBackDrillData(files):
                         if i > 4 and val == 0:
                             val = None
                         r[i] = val
+
+                # 将加工记录栏位扩充至6轴
+                while len(r)<23:
+                    r.append(None)                
 
                 # 如果当前记录与前一个记录是同一个孔，则合并记录文件
                 if len(result) > 0:
@@ -316,7 +321,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         fileName, filetype = QFileDialog.getOpenFileName(self,
                                                          "选取钻孔程序",
                                                          "./",
-                                                         "背钻程序 (*.B00;*.BM0;*.dat);;所有文件 (*)")
+                                                         "背钻程序 (*.B00;*.BM0;*.BA0;*.BB0);;所有文件 (*)")
         if fileName and path.isfile(fileName):
             self.toolSize, self.toolPos, self.toolDepth, = loadPrgData(
                 fileName)
