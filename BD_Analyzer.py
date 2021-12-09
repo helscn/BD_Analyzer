@@ -13,7 +13,7 @@ import sys
 from os import path
 
 BASE_DIR = path.dirname(__file__)
-sys.path.insert(0, path.join(BASE_DIR,'ui'))
+sys.path.insert(0, path.join(BASE_DIR, 'ui'))
 
 
 def parseNumber(s, length=3, lead_zero=True):
@@ -142,7 +142,7 @@ def loadBackDrillData(files):
             # 读取 header
             header = next(csvfile)
             # 加工记录总栏位数为 轴数*3+5
-            if len(header) <= 8 or header[0]!="#Date" or header[1]!="N":
+            if len(header) <= 8 or header[0] != "#Date" or header[1] != "N":
                 raise ValueError('无法识别的背钻记录文件:\n'+file_path)
 
             for r in csvfile:
@@ -171,8 +171,8 @@ def loadBackDrillData(files):
                         r[i] = val
 
                 # 将加工记录栏位扩充至6轴
-                while len(r)<23:
-                    r.append(None)                
+                while len(r) < 23:
+                    r.append(None)
 
                 # 如果当前记录与前一个记录是同一个孔，则合并记录文件
                 if len(result) > 0:
@@ -212,50 +212,82 @@ def calc_outliers(data, lag, tol):
     return weight
 
 
-def getIntPos(x, y):
-    # 将坐标*1000并转换为int
+def getIntPos(x, y, scale=10000):
+    # 将坐标拉伸后转换为int
     if type(x) is str:
         x = float(x)
     if type(y) is str:
         y = float(y)
-    return (int(round(x*1000)), int(round(y*1000)))
+    return (int(round(x*scale)), int(round(y*scale)))
 
 
-def judgeShift(data_pos, prg_pos):
-    # 判断两组坐标数组是否呈线性一致
-    if len(data_pos) != len(prg_pos):
-        return False
+def transformPos(x, y, mirrorX=False, mirrorY=False, swapXY=False, shiftX=0, shiftY=0):
+    if mirrorX:
+        x = -x
+    if mirrorY:
+        y = -y
+    if swapXY:
+        x, y = y, x
+    x = x-shiftX
+    y = y-shiftY
+    return (x, y)
+
+
+def checkVer(data_pos, prg_pos, mirrorX=False, mirrorY=False, swapXY=False):
+    # 判断数据坐标经过相限转换后是否和程序坐标匹配
     shiftX = None
     shiftY = None
     for m, n in zip(data_pos, prg_pos):
-        curX = m[0]-n[0]
-        curY = m[1]+n[1]
-        if shiftX is None or shiftY is None:
-            shiftX = curX
-            shiftY = curY
-        if shiftX != curX or shiftY != curY:
+        # 将data中的坐标进行象限转换
+        x, y = transformPos(m[0], m[1], mirrorX, mirrorY, swapXY)
+        if shiftX is None:
+            shiftX = x-n[0]
+        if shiftY is None:
+            shiftY = y-n[1]
+        if x-n[0] != shiftX or y-n[1] != shiftY:
             return None
-    return (shiftX/1000, shiftY/1000)
+    return {
+        'mirrorX': mirrorX,
+        'mirrorY': mirrorY,
+        'swapXY': swapXY,
+        'shiftX': shiftX,
+        'shiftY': shiftY
+    }
 
 
-def calc_shift(prg_file, data, sample=10):
+def getTransform(data_pos, prg_pos):
+    # 尝试判断数据的坐标象限信息及平移量
+    for i in range(8):
+        mirrorX = bool(i & 1)
+        mirrorY = bool(i & 2)
+        swapXY = bool(i & 4)
+        result = checkVer(data_pos, prg_pos, mirrorX, mirrorY, swapXY)
+        if result:
+            return result
+    return None
+
+
+def calc_coeffi(prg_file, data, sample=4):
     # 根据程序坐标和加工记录坐标自动计算坐标偏移量
     #   shiftX = 机台坐标X - 程序坐标X
     #   shiftY = 机台坐标Y + 程序坐标Y
 
     prg_pos = []
     curTool = None
-    toolPattern = re.compile(r'^T0?[2-9]$')
+    toolPattern = re.compile(r'^T0?[1-9]$')
     posPattern = re.compile(r'^X(-?\d*)Y(-?\d*)$')
     with open(prg_file, 'r') as prg:
         for line in prg:
+            line = line.strip()
             if toolPattern.match(line):
+                # 判断刀具指令
                 curTool = line
             elif curTool and posPattern.match(line):
+                # 已识别当前刀具编号后查找钻孔程序坐标
                 x, y = posPattern.match(line).groups()
                 x = parseNumber(x, length=3, lead_zero=True)
                 y = parseNumber(y, length=3, lead_zero=True)
-                x, y = getIntPos(x, y)
+                x, y = getIntPos(x, y, scale=1000)
                 prg_pos.append((x, y))
             if len(prg_pos) == sample:
                 break
@@ -263,15 +295,16 @@ def calc_shift(prg_file, data, sample=10):
     data_pos = []
     for r in data:
         try:
-            x, y = getIntPos(float(r[3]), float(r[4]))
+            x, y = getIntPos(float(r[3]), float(r[4]), scale=1000)
             data_pos.append((x, y))
         except Exception:
             continue
-        if len(data_pos) > sample:
-            data_pos.pop(0)
-        shiftXY = judgeShift(data_pos, prg_pos)
-        if shiftXY:
-            return shiftXY
+        if len(data_pos) == sample:
+            result = getTransform(data_pos, prg_pos)
+            if result:
+                result['shiftX'] = result['shiftX']/1000
+                result['shiftY'] = result['shiftY']/1000
+            return result
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -421,19 +454,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
         prg_file = self.prgFilePath.text()
         if not self.posShifted:
-            shiftPos = calc_shift(prg_file, self.data)
-            if shiftPos is None:
+            coeffi = calc_coeffi(prg_file, self.data, sample=4)
+            if coeffi is None:
                 QMessageBox.warning(
-                    self, '错误', '自动获取加工记录中的坐标平移量失败，无法将加工坐标与程序坐标进行匹配！', QMessageBox.Ok)
-                shiftPos = (0, 0)
+                    self, '错误', '加工坐标与钻孔程序坐标不匹配，无法对加工记录坐标进行自动转换！', QMessageBox.Ok)
+                coeffi = {
+                    'mirrorX': False,
+                    'mirrorY': False,
+                    'swapXY': False,
+                    'shiftX': 0,
+                    'shiftY': 0
+                }
 
-            # 平移坐标数据
+            # 对加工记录坐标数据进行变换，以匹配程序坐标
             for r in self.data:
-                r[3] = r[3]-shiftPos[0]
-                r[4] = -r[4]+shiftPos[1]
+                r[3], r[4] = transformPos(r[3], r[4], **coeffi)
 
-            self.lblShiftX.setText(str(shiftPos[0]))
-            self.lblShiftY.setText(str(shiftPos[1]))
+            self.lblShiftX.setText(str(coeffi['shiftX']))
+            self.lblShiftY.setText(str(coeffi['shiftY']))
             self.posShifted = True
 
         self.lastClickedPoints = []
@@ -518,7 +556,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             break
         self.lastClickedPoints = points
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
