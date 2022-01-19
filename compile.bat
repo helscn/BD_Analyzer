@@ -43,13 +43,13 @@ IF ERRORLEVEL 2 SET show_console=--console
 IF ERRORLEVEL 1 SET show_console=--noconsole
 
 ECHO.
-IF EXIST %compile_path%\.env\Scripts\activate.bat (
+IF EXIST "%compile_path%\.env\Scripts\activate.bat" (
 	ECHO 正在激活脚本运行的 Python 虚拟环境...
-	CALL %compile_path%\.env\Scripts\activate.bat
+	CALL "%compile_path%\.env\Scripts\activate.bat"
 )
 IF EXIST %compile_path%\.venv\Scripts\activate.bat (
 	ECHO 正在激活脚本运行的 Python 虚拟环境...
-	CALL %compile_path%\.venv\Scripts\activate.bat
+	CALL "%compile_path%\.venv\Scripts\activate.bat"
 )
 
 ECHO.
@@ -63,14 +63,15 @@ IF ERRORLEVEL 1 (
 	ECHO  脚本 %compile_file% 打包完成。
 )
 
-IF EXIST %compile_path%\.env\Scripts\deactivate.bat (
+IF EXIST "%compile_path%\.env\Scripts\deactivate.bat" (
 	ECHO.
 	ECHO 正在退出脚本运行的 Python 虚拟环境...
-	CALL %compile_path%\.env\Scripts\deactivate.bat
+	CALL "%compile_path%\.env\Scripts\deactivate.bat"
 )
-IF EXIST %compile_path%\.venv\Scripts\deactivate.bat (
+IF EXIST "%compile_path%\.venv\Scripts\deactivate.bat" (
 	ECHO.
 	ECHO 正在退出脚本运行的 Python 虚拟环境...
-	CALL %compile_path%\.venv\Scripts\deactivate.bat
-)ECHO.
+	CALL "%compile_path%\.venv\Scripts\deactivate.bat"
+)
+ECHO.
 PAUSE
